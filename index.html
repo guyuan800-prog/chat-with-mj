@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>mj</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#fdfdfd">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E%F0%9F%92%AC%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="bg"></div>
+
+<header>
+  <b id="name" title="点击修改名字">mj</b><small id="st">在线</small>
+  <button class="hb r2" id="reply" title="让 mj 回复" aria-label="让 mj 回复">☾</button>
+  <button class="hb r" id="star" title="更多" aria-haspopup="true">☆</button>
+  <div class="menu" id="menu">
+    <button id="openSheet">美化</button>
+    <button id="clear">清空聊天</button>
+  </div>
+</header>
+
+<main id="chat" aria-live="polite"></main>
+
+<div id="bar"><div class="in">
+  <input id="msg" type="text" placeholder="发消息给 mj…" autocomplete="off" enterkeyhint="send">
+  <button class="send" id="send">发送</button>
+</div></div>
+
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="美化设置">
+  <div class="mask" id="mask"></div>
+  <div class="card">
+    <div class="sheet-hd"><b>美化</b><button id="done">完成</button></div>
+
+    <section>
+      <h4>主题</h4>
+      <div class="chips" id="themeChips">
+        <button data-v="auto">跟随系统</button>
+        <button data-v="light">浅色</button>
+        <button data-v="dark">深色</button>
+      </div>
+    </section>
+
+    <section>
+      <h4>背景图</h4>
+      <div class="chips">
+        <button id="pickBg">选择图片…</button>
+        <button id="clearBg">移除背景</button>
+      </div>
+      <p class="hint">自动压缩并铺满屏幕，会叠一层柔化遮罩保证文字清晰。</p>
+    </section>
+
+    <section>
+      <h4>我的气泡</h4>
+      <div class="swatches" id="meSw"></div>
+      <div class="chips gap-top" id="meStyleChips">
+        <button data-v="solid">实色</button>
+        <button data-v="clear">透明</button>
+        <button data-v="frost">磨砂</button>
+      </div>
+      <p class="hint">彩虹圆点可自定义任意颜色；透明只留描边，磨砂为半透明玻璃质感。</p>
+    </section>
+
+    <section>
+      <h4>对方气泡（mj）</h4>
+      <div class="swatches" id="otSw"></div>
+      <div class="chips gap-top" id="otStyleChips">
+        <button data-v="solid">实色</button>
+        <button data-v="clear">透明</button>
+        <button data-v="frost">磨砂</button>
+      </div>
+      <p class="hint">选「自动」时跟随深浅主题配色，质感不可调整。</p>
+    </section>
+
+    <section>
+      <h4>字号</h4>
+      <div class="chips" id="sizeChips">
+        <button data-v="16">小</button>
+        <button data-v="18">标准</button>
+        <button data-v="21">大</button>
+        <button data-v="24">特大</button>
+      </div>
+    </section>
+
+    <section>
+      <h4>字体</h4>
+      <div class="chips" id="fontChips">
+        <button data-v="sys">系统</button>
+        <button data-v="hei">黑体</button>
+        <button data-v="song">宋体</button>
+        <button data-v="kai">楷体</button>
+        <button data-v="round">圆体</button>
+        <button data-v="mono">等宽</button>
+      </div>
+    </section>
+
+    <section>
+      <h4>圆角</h4>
+      <div class="chips" id="radiusChips">
+        <button data-v="26">圆润</button>
+        <button data-v="18">适中</button>
+        <button data-v="10">方正</button>
+      </div>
+    </section>
+
+    <section>
+      <button class="danger" id="clear2">清空聊天记录</button>
+    </section>
+  </div>
+</div>
+
+<input type="file" id="file" accept="image/*" hidden>
+
+<script src="app.js"></script>
+</body>
+</html>
