@@ -11,7 +11,7 @@
   --ot:#e9e9e9;--ot-t:#1c1c1c;--ot-bd:transparent;--ot-time:#707070;
   --bar:#fff;--bar-b:#e3e3e3;--bar-t:#222;--inp:#f1f1f1;--sel:#2f7cf6;
   --veil:rgba(253,253,253,.58);
-  --fs:18px;--r:24px;--bg-img:none;
+  --fs:18px;--r:24px;--bg-img:none;--bg-op:1;
   --accent:#2f7cf6;
   --ff:-apple-system,"PingFang SC","Noto Sans SC","Microsoft YaHei",sans-serif;
 }
@@ -27,11 +27,14 @@ html{scroll-padding-top:env(safe-area-inset-top,0px);background:var(--bg)}
 body{margin:0;font-family:var(--ff);color:var(--bar-t);background:transparent}
 
 /* 背景层 */
-#bg{position:fixed;inset:0;z-index:-1;pointer-events:none;
-  background-color:var(--bg);background-image:var(--bg-img);
-  background-size:cover;background-position:center;background-repeat:no-repeat}
+#bg{position:fixed;inset:0;z-index:-1;pointer-events:none;background-color:var(--bg)}
+#bg::before{content:"";position:absolute;inset:0;
+  background-image:var(--bg-img);
+  background-size:cover;background-position:center;background-repeat:no-repeat;
+  opacity:var(--bg-op,1)}
 #bg::after{content:"";position:absolute;inset:0;background:var(--veil);opacity:0;transition:opacity .35s ease}
-#bg.has::after{opacity:1}
+/* 不透明度越高，柔化遮罩越弱；100% 时遮罩为 0，露出原图 */
+#bg.has::after{opacity:calc(1 - var(--bg-op,1))}
 
 header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bar);border-bottom:1px solid var(--bar-b);text-align:center;padding:10px 12px;font-size:17px;font-weight:600}
 .hb{position:absolute;top:50%;transform:translateY(-50%);padding:5px 11px;font-size:14px;background:none;border:0}
@@ -116,6 +119,16 @@ button:focus-visible{outline:2px solid var(--sel);outline-offset:2px}
 .sw-custom{background:conic-gradient(from .25turn,#ff5f6d,#ffc371,#47cf73,#2f7cf6,#7a5af8,#ff5f6d)}
 .sw-custom input{position:absolute;inset:0;width:100%;height:100%;opacity:0;border:0;padding:0;margin:0;cursor:pointer}
 .hint{margin:9px 0 0;font-size:12px;line-height:1.5;opacity:.5}
+.slider-row{display:flex;align-items:center;gap:12px}
+.slider-row input[type=range]{flex:1;min-width:0;height:22px;-webkit-appearance:none;appearance:none;
+  background:transparent;outline:none;padding:0;margin:0}
+.slider-row input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:var(--bar-b)}
+.slider-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;margin-top:-8px;
+  border-radius:50%;background:var(--accent);box-shadow:0 1px 4px rgba(0,0,0,.25)}
+.slider-row input[type=range]::-moz-range-track{height:4px;border-radius:2px;background:var(--bar-b)}
+.slider-row input[type=range]::-moz-range-thumb{width:20px;height:20px;border:0;border-radius:50%;background:var(--accent)}
+.slider-row input[type=range]:focus-visible{outline:2px solid var(--sel);outline-offset:4px}
+#bgOpVal{font-size:13px;opacity:.65;min-width:3em;text-align:right;font-variant-numeric:tabular-nums}
 .danger{background:transparent;border:1px solid var(--bar-b);border-radius:14px;padding:9px 18px;font-size:14px;color:#e05252}
 @keyframes fade{from{opacity:0}to{opacity:1}}
 @keyframes up{from{transform:translateY(30px);opacity:0}to{transform:none;opacity:1}}
@@ -168,6 +181,15 @@ button:focus-visible{outline:2px solid var(--sel);outline-offset:2px}
         <button id="clearBg">移除背景</button>
       </div>
       <p class="hint">自动压缩并铺满屏幕，会叠一层柔化遮罩保证文字清晰。</p>
+    </section>
+
+    <section>
+      <h4>背景不透明度</h4>
+      <div class="slider-row">
+        <input type="range" id="bgOp" min="0" max="100" step="1" value="100" aria-label="背景不透明度">
+        <span id="bgOpVal">100%</span>
+      </div>
+      <p class="hint">100% 为原图；调低会淡化图片并加深柔化遮罩，保证文字清晰；0% 等于隐藏背景。</p>
     </section>
 
     <section>
@@ -344,7 +366,7 @@ var PAL_ME=null,PAL_OT=null;
 
 /* 注意：这里只操作内部变量 d，不要引用外部尚未赋值的 prefs */
 var prefs=(function(){
-  var d={theme:"auto",bg:"",me:"graphite",meStyle:"solid",ot:"",otStyle:"solid",fs:18,r:26,font:"sys",name:"mj"};
+  var d={theme:"auto",bg:"",bgOp:100,me:"graphite",meStyle:"solid",ot:"",otStyle:"solid",fs:18,r:26,font:"sys",name:"mj"};
   try{
     var v=localStorage.getItem(PKEY);
     if(v){
@@ -357,6 +379,7 @@ var prefs=(function(){
   if(!d.meStyle)d.meStyle="solid";
   if(d.ot===undefined||d.ot===null)d.ot="";
   if(!d.otStyle)d.otStyle="solid";
+  if(typeof d.bgOp!=="number"||!isFinite(d.bgOp))d.bgOp=100;
   return d;
 })();
 
@@ -415,6 +438,12 @@ function applyPrefs(){
     r.style.removeProperty("--bg-img");
     bgEl.classList.remove("has");
   }
+
+  /* 背景不透明度 */
+  var op=Number(prefs.bgOp);
+  if(!isFinite(op))op=100;
+  op=Math.max(0,Math.min(100,op));
+  r.style.setProperty("--bg-op",op/100);
 
   /* 我的气泡 */
   var mv=paintVars(colorOf(prefs.me),prefs.meStyle);
@@ -515,6 +544,13 @@ function syncUI(){
   syncPalette(PAL_ME,prefs.me);
   syncPalette(PAL_OT,prefs.ot);
 
+  /* 同步不透明度滑杆 */
+  var opEl=document.getElementById("bgOp"),opVal=document.getElementById("bgOpVal");
+  if(opEl){
+    opEl.value=prefs.bgOp;
+    opVal.textContent=prefs.bgOp+"%";
+  }
+
   /* 自动配色时禁用质感按钮 */
   var bs=document.querySelectorAll("#otStyleChips button[data-v]");
   for(var i=0;i<bs.length;i++){bs[i].disabled=!prefs.ot;}
@@ -546,6 +582,18 @@ bindGroup("radiusChips","r",Number);
 bindGroup("fontChips","font");
 bindGroup("meStyleChips","meStyle");
 bindGroup("otStyleChips","otStyle");
+
+/* 背景不透明度滑杆 */
+(function(){
+  var el=document.getElementById("bgOp"),val=document.getElementById("bgOpVal");
+  if(!el)return;
+  el.addEventListener("input",function(){
+    prefs.bgOp=Number(el.value);
+    val.textContent=prefs.bgOp+"%";
+    applyPrefs();
+  });
+  el.addEventListener("change",function(){savePrefs();});
+})();
 
 /* 让每个字体按钮用自身字体做预览 */
 (function(){
