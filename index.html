@@ -53,6 +53,11 @@ header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var
 header small{display:block;font-size:12px;font-weight:400;opacity:.6;margin-top:1px;min-height:1.3em}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--bar);z-index:10}
 
+/* 打印专用标题（屏幕上不显示） */
+#printHead{display:none;max-width:480px;margin:0 auto;padding:0 14px;text-align:center}
+#printHead b{font-size:18px}
+#printHead span{display:block;font-size:12px;opacity:.55;margin-top:3px}
+
 #chat{max-width:480px;margin:0 auto;padding:18px 14px 110px;display:flex;flex-direction:column}
 .row{display:flex;flex-direction:column;margin-top:3px;animation:pop .18s ease-out}
 .row.gap{margin-top:34px}
@@ -138,6 +143,42 @@ button:focus-visible{outline:2px solid var(--sel);outline-offset:2px}
   background:rgba(0,0,0,.82);color:#fff;font-size:14px;padding:9px 18px;border-radius:20px;
   opacity:0;pointer-events:none;transition:opacity .22s,transform .22s;z-index:30;max-width:80vw;text-align:center}
 .toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* ============ 导出 PDF / 打印样式 ============ */
+@media print{
+  @page{margin:14mm 12mm}
+
+  /* 打印一律使用浅色纸面，避免深色主题浪费墨水 */
+  html,body{background:#fff !important}
+  :root{
+    --me:#ececec !important;
+    --me-t:#1c1c1c !important;
+    --me-bd:transparent !important;
+    --ot:#f5f5f5 !important;
+    --ot-t:#1c1c1c !important;
+    --ot-bd:transparent !important;
+    --bar-t:#1c1c1c !important;
+    --veil:transparent !important;
+  }
+
+  /* 隐藏所有交互元素与背景层 */
+  #bg,header,#bar,.menu,.sheet,.toast,body::before{display:none !important}
+
+  /* 显示打印标题 */
+  #printHead{display:block !important;max-width:none;padding:0 0 12px;margin:0 0 18px;border-bottom:1px solid #ddd}
+
+  /* 聊天区域：改为块级，分页更自然 */
+  #chat{display:block !important;max-width:none;margin:0;padding:0}
+
+  .row{margin-top:4px;animation:none !important;
+    break-inside:avoid;page-break-inside:avoid}
+  .row.gap{margin-top:18px}
+  .bub{max-width:80%;box-shadow:none !important}
+  .typing{display:none !important}
+
+  /* 让气泡底色能被打印出来 */
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
 </style>
 </head>
 <body>
@@ -149,9 +190,12 @@ button:focus-visible{outline:2px solid var(--sel);outline-offset:2px}
   <button class="hb r" id="star" title="更多" aria-haspopup="true">☆</button>
   <div class="menu" id="menu">
     <button id="openSheet">美化</button>
+    <button id="exportPdf">导出为 PDF</button>
     <button id="clear">清空聊天</button>
   </div>
 </header>
+
+<div id="printHead"><b id="pName">mj</b><span id="pMeta"></span></div>
 
 <main id="chat" aria-live="polite"></main>
 
@@ -709,6 +753,41 @@ function toast(t){
   clearTimeout(toastEl._t);
   toastEl._t=setTimeout(function(){toastEl.classList.remove("show")},2000);
 }
+
+/* ============ 导出 PDF ============ */
+/* 借助浏览器打印：在打印窗口中选择「另存为 PDF」即可 */
+var _printTitle=null;
+
+window.addEventListener("beforeprint",function(){
+  _printTitle=document.title;
+  var d=new Date();
+  var ymd=d.getFullYear()+"-"+("0"+(d.getMonth()+1)).slice(-2)+"-"+("0"+d.getDate()).slice(-2);
+  /* 浏览器会用 document.title 作为 PDF 的默认文件名 */
+  document.title=(prefs.name||"mj")+" 聊天记录 "+ymd;
+});
+
+window.addEventListener("afterprint",function(){
+  if(_printTitle!==null){
+    document.title=_printTitle;
+    _printTitle=null;
+  }
+});
+
+function exportPdf(){
+  var d=new Date();
+  var ymd=d.getFullYear()+"-"+("0"+(d.getMonth()+1)).slice(-2)+"-"+("0"+d.getDate()).slice(-2);
+  var pName=document.getElementById("pName");
+  var pMeta=document.getElementById("pMeta");
+  if(pName)pName.textContent=(prefs.name||"mj")+" · 聊天记录";
+  if(pMeta)pMeta.textContent=ymd+" · 共 "+data.length+" 条消息";
+
+  toast("在打印窗口选择「另存为 PDF」");
+  setTimeout(function(){window.print();},420);
+}
+document.getElementById("exportPdf").onclick=function(){
+  menu.classList.remove("open");
+  exportPdf();
+};
 
 /* ============ 事件绑定 ============ */
 document.getElementById("send").onclick=send;
