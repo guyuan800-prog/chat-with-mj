@@ -786,7 +786,7 @@ function ymdNow(){
 window.addEventListener("beforeprint",function(){
   _printTitle=document.title;
   /* 浏览器会用 document.title 作为 PDF 的默认文件名 */
-  document.title=(prefs.name||"mj")+ymdNow();
+  document.title=(prefs.name||"mj")+" 聊天记录 "+ymdNow();
   rootEl.setAttribute("data-print",_printMode);
 });
 
