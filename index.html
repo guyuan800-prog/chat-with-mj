@@ -4,14 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>mj</title>
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#ffffff">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="mj">
-<link rel="icon" type="image/png" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-192.png">
 <style>
 :root{
   padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
@@ -191,8 +183,6 @@ button:focus-visible{outline:2px solid var(--sel);outline-offset:2px}
     <button id="openSheet">美化</button>
     <button id="exportPdf">导出 PDF · 完整美化</button>
     <button id="exportPlain">导出 PDF · 无背景</button>
-    <button id="installBtn">安装为应用</button>
-    <button id="refreshBtn">刷新（联网更新）</button>
     <button id="clear">清空聊天</button>
   </div>
 </header>
@@ -846,79 +836,6 @@ applyPrefs();
 applyName();
 syncUI();
 render(false);
-
-/* ============ PWA：注册 Service Worker + 安装 + 联网更新 ============ */
-var deferredInstall=null, swReg=null, hadController=false, reloading=false;
-var isHttp=/^https?:$/.test(location.protocol);
-function isStandalone(){return window.matchMedia("(display-mode: standalone)").matches||window.matchMedia("(display-mode: minimal-ui)").matches||navigator.standalone===true}
-
-window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();deferredInstall=e});
-window.addEventListener("appinstalled",function(){deferredInstall=null;toast("已安装")});
-
-if("serviceWorker" in navigator && isHttp){
-  hadController=!!navigator.serviceWorker.controller;
-  // 新版本接管后自动刷新一次（首次安装不刷新）
-  navigator.serviceWorker.addEventListener("controllerchange",function(){
-    if(!hadController){hadController=true;return}
-    if(reloading)return;reloading=true;
-    toast("已更新到最新版");
-    setTimeout(function(){location.reload()},400);
-  });
-  window.addEventListener("load",function(){
-    navigator.serviceWorker.register("sw.js",{scope:"./",updateViaCache:"none"}).then(function(reg){
-      swReg=reg;
-      reg.update().catch(function(){});
-      reg.addEventListener("updatefound",function(){
-        var w=reg.installing;if(!w)return;
-        w.addEventListener("statechange",function(){
-          if(w.state==="installed"&&navigator.serviceWorker.controller)w.postMessage("SKIP_WAITING");
-        });
-      });
-    }).catch(function(err){console.warn("SW 注册失败",err)});
-  });
-  // 回到前台 / 重新联网时检查更新
-  document.addEventListener("visibilitychange",function(){
-    if(document.visibilityState==="visible"&&swReg)swReg.update().catch(function(){});
-  });
-  window.addEventListener("online",function(){if(swReg)swReg.update().catch(function(){})});
-}
-
-/* 手动：联网强制刷新（清缓存 + 更新 SW + 重新加载） */
-function forceRefresh(){
-  if(!navigator.onLine){toast("现在是离线状态，无法联网刷新");return}
-  toast("正在联网刷新…");
-  var tasks=[];
-  if(window.caches)tasks.push(caches.keys().then(function(ks){return Promise.all(ks.map(function(k){return caches.delete(k)}))}));
-  if(swReg)tasks.push(swReg.update().catch(function(){}));
-  Promise.all(tasks).catch(function(){}).then(function(){
-    reloading=true;
-    var u=new URL(location.href);u.searchParams.set("_r",Date.now());
-    location.replace(u.toString());
-  });
-}
-(function(){
-  // 带 _r 参数刷新过后，把地址栏还原干净
-  try{var u=new URL(location.href);if(u.searchParams.has("_r")){u.searchParams.delete("_r");history.replaceState(null,"",u.pathname+(u.search||"")+u.hash)}}catch(e){}
-  var rb=document.getElementById("refreshBtn");if(rb)rb.onclick=forceRefresh;
-})();
-
-document.getElementById("installBtn").onclick=function(){
-  if(isStandalone()){toast("当前已经是应用模式");return}
-  if(deferredInstall){
-    var p=deferredInstall;deferredInstall=null;
-    p.prompt();
-    p.userChoice.then(function(r){if(r&&r.outcome==="dismissed")toast("已取消安装")}).catch(function(){});
-    return;
-  }
-  var ua=navigator.userAgent, why=[];
-  if(!isHttp) why.push("不能用本地文件打开，需要 https 网址");
-  else if(location.protocol==="http:"&&!/^(localhost|127\.)/.test(location.hostname)) why.push("需要 https");
-  if(/MicroMessenger|XiaoHongShu|xhs|QQ\/|Weibo|Alipay|DingTalk|UCBrowser|Quark/i.test(ua)) why.push("当前是 App 内置浏览器，请用 Chrome / Edge / Safari 打开");
-  if(/iPhone|iPad|iPod/.test(ua)) why.push("iPhone：用 Safari 点底部分享按钮 →「添加到主屏幕」");
-  if(!("serviceWorker" in navigator)) why.push("浏览器不支持 Service Worker");
-  if(!why.length) why.push("浏览器还没给出安装提示：先点「刷新（联网更新）」，等几秒后再点一次；也可点 Chrome 地址栏右侧的安装图标 / 菜单里的「安装 mj」。如果之前装过，请先在 chrome://apps 里删除旧的再试");
-  alert("暂时无法一键安装：\n\n· "+why.join("\n· "));
-};
 </script>
 </body>
 </html>
