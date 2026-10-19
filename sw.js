@@ -1,4 +1,4 @@
-const CACHE = "mj-chat-v1";
+const CACHE = "mj-chat-v2";
 const SHELL = ["./", "./index.html", "./manifest.json",
   "./icon-192.png", "./icon-512.png", "./maskable-512.png"];
 
