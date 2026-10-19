@@ -7,9 +7,18 @@
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
   "orientation": "portrait",
   "background_color": "#ffffff",
   "theme_color": "#ffffff",
+  "prefer_related_applications": false,
+  "categories": [
+    "social",
+    "lifestyle"
+  ],
   "icons": [
     {
       "src": "icon-192.png",
@@ -24,7 +33,7 @@
       "purpose": "any"
     },
     {
-      "src": "icon-512.png",
+      "src": "maskable-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"

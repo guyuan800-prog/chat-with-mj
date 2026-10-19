@@ -8,6 +8,7 @@
 <meta name="theme-color" content="#ffffff">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="mj">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -190,6 +191,7 @@ button:focus-visible{outline:2px solid var(--sel);outline-offset:2px}
     <button id="openSheet">美化</button>
     <button id="exportPdf">导出 PDF · 完整美化</button>
     <button id="exportPlain">导出 PDF · 无背景</button>
+    <button id="installBtn">安装为应用</button>
     <button id="clear">清空聊天</button>
   </div>
 </header>
@@ -844,10 +846,32 @@ applyName();
 syncUI();
 render(false);
 
-/* ============ PWA：注册 Service Worker（需 https 才能安装）============ */
+/* ============ PWA：注册 Service Worker + 安装按钮 ============ */
+var deferredInstall=null;
+window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();deferredInstall=e});
+window.addEventListener("appinstalled",function(){deferredInstall=null;toast("已安装")});
 if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
-  window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){})});
+  window.addEventListener("load",function(){
+    navigator.serviceWorker.register("sw.js",{scope:"./"}).catch(function(err){console.warn("SW 注册失败",err)});
+  });
 }
+document.getElementById("installBtn").onclick=function(){
+  if(deferredInstall){
+    deferredInstall.prompt();
+    deferredInstall.userChoice.finally(function(){deferredInstall=null});
+    return;
+  }
+  var ua=navigator.userAgent, why=[];
+  var standalone=window.matchMedia("(display-mode: standalone)").matches||navigator.standalone;
+  if(standalone){toast("当前已经是应用模式");return}
+  if(!/^https?:$/.test(location.protocol)) why.push("不能用本地文件打开，需要 https 网址");
+  else if(location.protocol==="http:"&&!/^(localhost|127\.)/.test(location.hostname)) why.push("需要 https");
+  if(/MicroMessenger|XiaoHongShu|xhs|QQ\/|Weibo|Alipay|DingTalk|UCBrowser|Quark/i.test(ua)) why.push("当前是 App 内置浏览器，请用 Chrome / Safari 打开");
+  if(/iPhone|iPad|iPod/.test(ua)) why.push("iPhone：用 Safari 点底部分享按钮 →「添加到主屏幕」");
+  if(!("serviceWorker" in navigator)) why.push("浏览器不支持 Service Worker");
+  if(!why.length) why.push("浏览器暂时没有给出安装提示：先刷新页面一次、等几秒再试；若之前装过，请先在 chrome://apps 或桌面删除旧的快捷方式再试");
+  alert("暂时无法一键安装：\n\n· "+why.join("\n· "));
+};
 </script>
 </body>
 </html>
