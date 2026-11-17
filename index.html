@@ -896,6 +896,36 @@ function stamp(){
   function z(n){return ("0"+n).slice(-2)}
   return d.getFullYear()+z(d.getMonth()+1)+z(d.getDate())+"-"+z(d.getHours())+z(d.getMinutes());
 }
+/* 截图组件不会按浏览器规则“收缩过大的圆角”，也画不出 inset 描边，导出前在克隆页里手动修正气泡 */
+function fixBubbles(doc){
+  var win=doc.defaultView,list=doc.querySelectorAll(".bub");
+  for(var i=0;i<list.length;i++){
+    var b=list[i],cs=win.getComputedStyle(b);
+
+    /* 1. inset 描边（透明质感 / 白色气泡）→ 真正的边框，内边距相应减小 */
+    var m=/(rgba?\([^)]+\)|#[0-9a-fA-F]{3,8})\s+0px\s+0px\s+0px\s+([\d.]+)px\s+inset/.exec(cs.boxShadow||"");
+    if(m){
+      var bw=parseFloat(m[2]);
+      var pad=["Top","Right","Bottom","Left"];
+      var pv=pad.map(function(p){return parseFloat(cs["padding"+p])||0});
+      b.style.boxShadow="none";
+      b.style.border=bw+"px solid "+m[1];
+      for(var j=0;j<4;j++)b.style["padding"+pad[j]]=Math.max(0,pv[j]-bw)+"px";
+    }
+
+    /* 2. 圆角：总和超过边长时，按比例缩小（和浏览器一致），避免气泡变形 */
+    var names=["TopLeft","TopRight","BottomRight","BottomLeft"];
+    var rv=names.map(function(n){return parseFloat(cs["border"+n+"Radius"])||0});
+    var w=b.offsetWidth,h=b.offsetHeight,f=1;
+    function chk(side,sum){if(sum>side&&sum>0)f=Math.min(f,side/sum)}
+    chk(w,rv[0]+rv[1]);chk(w,rv[3]+rv[2]);
+    chk(h,rv[0]+rv[3]);chk(h,rv[1]+rv[2]);
+    if(f<1){
+      for(var k=0;k<4;k++)b.style["border"+names[k]+"Radius"]=(rv[k]*f*0.995)+"px";
+    }
+  }
+}
+
 function doExport(mode){
   if(exporting)return;
   exporting=true;
@@ -921,6 +951,7 @@ function doExport(mode){
         var e=doc.documentElement;
         e.setAttribute("data-shot",mode);
         e.style.paddingTop="0";e.style.paddingBottom="0";
+        fixBubbles(doc);
       }
     }).then(function(shot){
       var canvas=composeBg(shot,mode,w,vh,bgImg);
