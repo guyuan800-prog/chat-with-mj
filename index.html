@@ -159,9 +159,8 @@ button:focus-visible{outline:2px solid var(--sel);outline-offset:2px}
 :root[data-shot] body::before{display:none}
 :root[data-shot] #chat{padding-bottom:24px}
 :root[data-shot] .row{animation:none !important}
-:root[data-tile] #bg::before{background-size:var(--tile-w) var(--tile-h);background-repeat:repeat-y;background-position:top left}
-:root[data-shot="plain"] #bg{display:none !important}
-:root[data-shot="plain"],:root[data-shot="plain"] body{background:#fff !important}
+:root[data-shot] #bg{display:none !important}
+:root[data-shot],:root[data-shot] body{background:transparent !important}
 :root[data-shot="plain"]{--bar-t:#1c1c1c;--bar-b:#ddd}
 :root[data-shot="plain"]:not([data-ot]){--ot:#f0f0f0;--ot-t:#1c1c1c;--ot-time:#707070}
 
@@ -851,26 +850,44 @@ function makePdf(jpg,iw,ih,pw,ph){
   return new Blob(parts,{type:"application/pdf"});
 }
 
-/* 把背景图按「一屏」的大小裁好（和屏幕上看到的一样），导出时每屏重复一张，整段聊天都有完整背景 */
-function makeBgTile(w,vh){
+/* 背景不交给截图组件，导出后自己合成：每「一屏」铺一张和屏幕上一样的背景，整段聊天都有 */
+function loadBgImg(){
   return new Promise(function(res){
     if(!prefs.bg)return res(null);
     var img=new Image();
-    img.onload=function(){
-      try{
-        var k=Math.min(2,3000/Math.max(w,vh));
-        var tw=Math.round(w*k),th=Math.round(vh*k);
-        var c=document.createElement("canvas");c.width=tw;c.height=th;
-        var ctx=c.getContext("2d");
-        var sc=Math.max(tw/img.width,th/img.height);
-        var dw=img.width*sc,dh=img.height*sc;
-        ctx.drawImage(img,(tw-dw)/2,(th-dh)/2,dw,dh);
-        res(c.toDataURL("image/jpeg",0.9));
-      }catch(e){res(null)}
-    };
+    img.onload=function(){res(img)};
     img.onerror=function(){res(null)};
     img.src=prefs.bg;
   });
+}
+function composeBg(shot,mode,w,vh,img){
+  var out=document.createElement("canvas");
+  out.width=shot.width;out.height=shot.height;
+  var ctx=out.getContext("2d");
+  var r=document.documentElement,cs=getComputedStyle(r);
+  var k=out.width/w;
+  ctx.fillStyle=mode==="plain"?"#ffffff":cs.backgroundColor;
+  ctx.fillRect(0,0,out.width,out.height);
+  if(mode==="full"&&img){
+    var op=Math.max(0,Math.min(100,Number(prefs.bgOp)));
+    if(!isFinite(op))op=100;
+    op=op/100;
+    var tw=w*k,th=vh*k;
+    var s=Math.max(tw/img.width,th/img.height),dw=img.width*s,dh=img.height*s;
+    ctx.globalAlpha=op;
+    for(var y=0;y<out.height;y+=th){
+      ctx.save();
+      ctx.beginPath();ctx.rect(0,y,tw,th);ctx.clip();
+      ctx.drawImage(img,(tw-dw)/2,y+(th-dh)/2,dw,dh);
+      ctx.restore();
+    }
+    ctx.globalAlpha=1-op;
+    ctx.fillStyle=cs.getPropertyValue("--veil").trim()||"rgba(253,253,253,.58)";
+    ctx.fillRect(0,0,out.width,out.height);
+    ctx.globalAlpha=1;
+  }
+  ctx.drawImage(shot,0,0);
+  return out;
 }
 
 var exporting=false,outPng=null,outPdf=null,outUrl="";
@@ -887,9 +904,8 @@ function doExport(mode){
   var oldY=window.scrollY;
   window.scrollTo(0,0);
 
-  var tileP=makeBgTile(document.documentElement.clientWidth,window.innerHeight);
-  Promise.all([loadH2C(),(document.fonts&&document.fonts.ready)||null,tileP]).then(function(rs){
-    var tile=rs[2],vh=window.innerHeight;
+  Promise.all([loadH2C(),(document.fonts&&document.fonts.ready)||null,loadBgImg()]).then(function(rs){
+    var bgImg=rs[2],vh=window.innerHeight;
     var r=document.documentElement;
     var w=r.clientWidth;
     var hd=document.querySelector("header").offsetHeight;
@@ -897,23 +913,17 @@ function doExport(mode){
     var sc=Math.min(window.devicePixelRatio||1,3);
     sc=Math.min(sc,Math.sqrt(16000000/(w*h)),32000/h); /* 手机浏览器画布上限 */
     sc=Math.max(sc,0.4);
-    var bgc=mode==="plain"?"#ffffff":getComputedStyle(r).backgroundColor;
     return html2canvas(document.body,{
       scale:sc,width:w,height:h,windowWidth:w,windowHeight:h,
       x:0,y:0,scrollX:0,scrollY:0,
-      backgroundColor:bgc,useCORS:true,logging:false,
+      backgroundColor:null,useCORS:true,logging:false,
       onclone:function(doc){
         var e=doc.documentElement;
         e.setAttribute("data-shot",mode);
         e.style.paddingTop="0";e.style.paddingBottom="0";
-        if(tile&&mode==="full"){
-          e.setAttribute("data-tile","1");
-          e.style.setProperty("--bg-img",'url("'+tile+'")');
-          e.style.setProperty("--tile-w",w+"px");
-          e.style.setProperty("--tile-h",vh+"px");
-        }
       }
-    }).then(function(canvas){
+    }).then(function(shot){
+      var canvas=composeBg(shot,mode,w,vh,bgImg);
       return Promise.all([blobOf(canvas,"image/png"),blobOf(canvas,"image/jpeg",0.92)]).then(function(b){
         return b[1].arrayBuffer().then(function(buf){
           var k=Math.min(1,14400/h); /* PDF 单页最大 14400 */
