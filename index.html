@@ -159,6 +159,7 @@ button:focus-visible{outline:2px solid var(--sel);outline-offset:2px}
 :root[data-shot] body::before{display:none}
 :root[data-shot] #chat{padding-bottom:24px}
 :root[data-shot] .row{animation:none !important}
+:root[data-tile] #bg::before{background-size:var(--tile-w) var(--tile-h);background-repeat:repeat-y;background-position:top left}
 :root[data-shot="plain"] #bg{display:none !important}
 :root[data-shot="plain"],:root[data-shot="plain"] body{background:#fff !important}
 :root[data-shot="plain"]{--bar-t:#1c1c1c;--bar-b:#ddd}
@@ -850,6 +851,28 @@ function makePdf(jpg,iw,ih,pw,ph){
   return new Blob(parts,{type:"application/pdf"});
 }
 
+/* 把背景图按「一屏」的大小裁好（和屏幕上看到的一样），导出时每屏重复一张，整段聊天都有完整背景 */
+function makeBgTile(w,vh){
+  return new Promise(function(res){
+    if(!prefs.bg)return res(null);
+    var img=new Image();
+    img.onload=function(){
+      try{
+        var k=Math.min(2,3000/Math.max(w,vh));
+        var tw=Math.round(w*k),th=Math.round(vh*k);
+        var c=document.createElement("canvas");c.width=tw;c.height=th;
+        var ctx=c.getContext("2d");
+        var sc=Math.max(tw/img.width,th/img.height);
+        var dw=img.width*sc,dh=img.height*sc;
+        ctx.drawImage(img,(tw-dw)/2,(th-dh)/2,dw,dh);
+        res(c.toDataURL("image/jpeg",0.9));
+      }catch(e){res(null)}
+    };
+    img.onerror=function(){res(null)};
+    img.src=prefs.bg;
+  });
+}
+
 var exporting=false,outPng=null,outPdf=null,outUrl="";
 function stamp(){
   var d=new Date();
@@ -864,7 +887,9 @@ function doExport(mode){
   var oldY=window.scrollY;
   window.scrollTo(0,0);
 
-  Promise.all([loadH2C(),(document.fonts&&document.fonts.ready)||null]).then(function(){
+  var tileP=makeBgTile(document.documentElement.clientWidth,window.innerHeight);
+  Promise.all([loadH2C(),(document.fonts&&document.fonts.ready)||null,tileP]).then(function(rs){
+    var tile=rs[2],vh=window.innerHeight;
     var r=document.documentElement;
     var w=r.clientWidth;
     var hd=document.querySelector("header").offsetHeight;
@@ -881,6 +906,12 @@ function doExport(mode){
         var e=doc.documentElement;
         e.setAttribute("data-shot",mode);
         e.style.paddingTop="0";e.style.paddingBottom="0";
+        if(tile&&mode==="full"){
+          e.setAttribute("data-tile","1");
+          e.style.setProperty("--bg-img",'url("'+tile+'")');
+          e.style.setProperty("--tile-w",w+"px");
+          e.style.setProperty("--tile-h",vh+"px");
+        }
       }
     }).then(function(canvas){
       return Promise.all([blobOf(canvas,"image/png"),blobOf(canvas,"image/jpeg",0.92)]).then(function(b){
