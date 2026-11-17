@@ -149,29 +149,26 @@ button:focus-visible{outline:2px solid var(--sel);outline-offset:2px}
   opacity:0;pointer-events:none;transition:opacity .22s,transform .22s;z-index:30;max-width:80vw;text-align:center}
 .toast.show{opacity:1;transform:translate(-50%,0)}
 
-/* ============ 导出 PDF / 打印样式 ============
-   不重排：页面尺寸 = 当前屏幕宽度 × 整段聊天高度（由 doExport 动态写入 @page），
-   气泡宽度、字号、圆角、间距、顶栏、背景图都和屏幕一致。
-   data-print="full"  完整美化（含背景图、深浅主题）
-   data-print="plain" 无背景（白纸，仍保留气泡/字体等美化） */
-@media print{
-  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  html,body{height:auto;overflow:hidden}
+/* ============ 导出长图 / PDF（截图方式，所见即所得） ============
+   导出时在克隆页面上加 data-shot，只隐藏输入栏/按钮，其余和屏幕完全一致。
+   data-shot="full"  完整美化（含背景图、深浅主题）
+   data-shot="plain" 无背景（白纸，仍保留气泡/字体等美化） */
+:root[data-shot] #bar,:root[data-shot] .menu,:root[data-shot] .sheet,:root[data-shot] .toast,
+:root[data-shot] .typing,:root[data-shot] .hb{display:none !important}
+:root[data-shot] header{position:static}
+:root[data-shot] body::before{display:none}
+:root[data-shot] #chat{padding-bottom:24px}
+:root[data-shot] .row{animation:none !important}
+:root[data-shot="plain"] #bg{display:none !important}
+:root[data-shot="plain"],:root[data-shot="plain"] body{background:#fff !important}
+:root[data-shot="plain"]{--bar-t:#1c1c1c;--bar-b:#ddd}
+:root[data-shot="plain"]:not([data-ot]){--ot:#f0f0f0;--ot-t:#1c1c1c;--ot-time:#707070}
 
-  /* 只隐藏交互元素，顶栏保留，和屏幕一样 */
-  #bar,.menu,.sheet,.toast,.typing,.hb,#printHead{display:none !important}
-  header{position:static}
-  body::before{display:none}
-
-  /* 聊天区保持屏幕上的样子，只去掉给输入栏预留的空白 */
-  #chat{padding-bottom:24px}
-  .row{animation:none !important}
-
-  :root[data-print="plain"] #bg{display:none !important}
-  :root[data-print="plain"],:root[data-print="plain"] body{background:#fff !important}
-  :root[data-print="plain"]{--bar-t:#1c1c1c;--bar-b:#ddd}
-  :root[data-print="plain"]:not([data-ot]){--ot:#f0f0f0;--ot-t:#1c1c1c;--ot-time:#707070}
-}
+/* 导出结果面板 */
+#outWrap{max-height:52vh;overflow:auto;border-radius:12px;border:1px solid var(--bar-b);margin:8px 0 6px;-webkit-overflow-scrolling:touch}
+#outImg{display:block;width:100%;height:auto}
+.outBtns{display:flex;gap:10px;margin-top:12px}
+.outBtns button{flex:1;padding:11px 14px}
 </style>
 </head>
 <body>
@@ -183,8 +180,8 @@ button:focus-visible{outline:2px solid var(--sel);outline-offset:2px}
   <button class="hb r" id="star" title="更多" aria-haspopup="true">☆</button>
   <div class="menu" id="menu">
     <button id="openSheet">美化</button>
-    <button id="exportPdf">导出 PDF · 完整美化</button>
-    <button id="exportPlain">导出 PDF · 无背景</button>
+    <button id="exportPdf">导出长图/PDF · 完整美化</button>
+    <button id="exportPlain">导出长图/PDF · 无背景</button>
     <button id="clear">清空聊天</button>
   </div>
 </header>
@@ -305,6 +302,19 @@ button:focus-visible{outline:2px solid var(--sel);outline-offset:2px}
     <section>
       <button class="danger" id="clear2">清空聊天记录</button>
     </section>
+  </div>
+</div>
+
+<div class="sheet" id="out" role="dialog" aria-modal="true" aria-label="导出结果">
+  <div class="mask" id="outMask"></div>
+  <div class="card">
+    <div class="sheet-hd"><b>导出完成</b><button id="outClose">关闭</button></div>
+    <div id="outWrap"><img id="outImg" alt="聊天长图预览"></div>
+    <p class="hint">一整张连续的长图，和屏幕上看到的一样。可上下滑动预览。</p>
+    <div class="outBtns">
+      <button class="send" id="savePng">保存长图 PNG</button>
+      <button id="savePdf">保存 PDF</button>
+    </div>
   </div>
 </div>
 
@@ -736,11 +746,11 @@ function shrink(file,cb){
 
 /* ============ 轻提示 ============ */
 var toastEl=document.getElementById("toast"),toastTimer=null;
-function toast(t){
+function toast(t,ms){
   toastEl.textContent=t;
   toastEl.classList.add("show");
   clearTimeout(toastTimer);
-  toastTimer=setTimeout(function(){toastEl.classList.remove("show")},2000);
+  toastTimer=setTimeout(function(){toastEl.classList.remove("show")},ms||2000);
 }
 
 /* ============ 背景图选择 / 移除 ============ */
@@ -798,32 +808,128 @@ msg.addEventListener("keydown",function(e){
 });
 replyBtn.addEventListener("click",reply);
 
-/* ============ 导出 PDF：页面 = 当前屏幕宽度 × 整段聊天高度 ============ */
-function doExport(mode){
-  menuEl.classList.remove("open");
-  var r=document.documentElement;
-  r.setAttribute("data-print",mode);
+/* ============ 导出：截图成一张连续长图，再生成 PNG / PDF ============ */
+var H2C_SRC=[
+  "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js",
+  "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"
+];
+function loadH2C(){
+  return new Promise(function(res,rej){
+    if(window.html2canvas)return res();
+    var i=0;
+    (function next(){
+      if(i>=H2C_SRC.length)return rej(new Error("load"));
+      var sc=document.createElement("script");
+      sc.src=H2C_SRC[i++];
+      sc.onload=function(){window.html2canvas?res():next()};
+      sc.onerror=function(){sc.remove();next()};
+      document.head.appendChild(sc);
+    })();
+  });
+}
+function blobOf(canvas,type,q){
+  return new Promise(function(res){canvas.toBlob(res,type,q)});
+}
+/* 把一张 JPEG 包成单页 PDF（页面尺寸 = 图片比例，整段聊天在同一页） */
+function makePdf(jpg,iw,ih,pw,ph){
+  var enc=new TextEncoder(),parts=[],len=0,offs=[];
+  function put(x){if(typeof x==="string")x=enc.encode(x);parts.push(x);len+=x.length;}
+  function f(n){return n.toFixed(2)}
+  function pad(n){return ("0000000000"+n).slice(-10)}
+  put("%PDF-1.4\n");
+  offs[1]=len;put("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+  offs[2]=len;put("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
+  offs[3]=len;put("3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 "+f(pw)+" "+f(ph)+"] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>\nendobj\n");
+  offs[4]=len;put("4 0 obj\n<< /Type /XObject /Subtype /Image /Width "+iw+" /Height "+ih+" /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length "+jpg.length+" >>\nstream\n");
+  put(jpg);put("\nendstream\nendobj\n");
+  var c="q "+f(pw)+" 0 0 "+f(ph)+" 0 0 cm /Im0 Do Q";
+  offs[5]=len;put("5 0 obj\n<< /Length "+c.length+" >>\nstream\n"+c+"\nendstream\nendobj\n");
+  var xr=len,x="xref\n0 6\n0000000000 65535 f \n";
+  for(var i=1;i<=5;i++)x+=pad(offs[i])+" 00000 n \n";
+  put(x+"trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n"+xr+"\n%%EOF");
+  return new Blob(parts,{type:"application/pdf"});
+}
 
-  var go=function(){
+var exporting=false,outPng=null,outPdf=null,outUrl="";
+function stamp(){
+  var d=new Date();
+  function z(n){return ("0"+n).slice(-2)}
+  return d.getFullYear()+z(d.getMonth()+1)+z(d.getDate())+"-"+z(d.getHours())+z(d.getMinutes());
+}
+function doExport(mode){
+  if(exporting)return;
+  exporting=true;
+  menuEl.classList.remove("open");
+  toast("正在生成长图…",60000);
+  var oldY=window.scrollY;
+  window.scrollTo(0,0);
+
+  Promise.all([loadH2C(),(document.fonts&&document.fonts.ready)||null]).then(function(){
+    var r=document.documentElement;
     var w=r.clientWidth;
     var hd=document.querySelector("header").offsetHeight;
-    var h=Math.ceil(hd+chat.scrollHeight-86+4); /* 86 = 屏幕底部预留 110 - 打印预留 24 */
-    var s=document.createElement("style");
-    s.id="pageStyle";
-    s.textContent="@page{size:"+w+"px "+h+"px;margin:0}";
-    document.head.appendChild(s);
-
-    var clean=function(){
-      r.removeAttribute("data-print");
-      var p=document.getElementById("pageStyle");if(p)p.remove();
-      window.removeEventListener("afterprint",clean);
-    };
-    window.addEventListener("afterprint",clean);
-    setTimeout(function(){window.print()},50);
-  };
-  /* 等网络字体加载完再导出，否则字体会变回系统字体 */
-  if(document.fonts&&document.fonts.ready)document.fonts.ready.then(go);else go();
+    var h=Math.ceil(hd+chat.scrollHeight-86); /* 屏幕底部预留 110，导出时只留 24 */
+    var sc=Math.min(window.devicePixelRatio||1,3);
+    sc=Math.min(sc,Math.sqrt(16000000/(w*h)),32000/h); /* 手机浏览器画布上限 */
+    sc=Math.max(sc,0.4);
+    var bgc=mode==="plain"?"#ffffff":getComputedStyle(r).backgroundColor;
+    return html2canvas(document.body,{
+      scale:sc,width:w,height:h,windowWidth:w,windowHeight:h,
+      x:0,y:0,scrollX:0,scrollY:0,
+      backgroundColor:bgc,useCORS:true,logging:false,
+      onclone:function(doc){
+        var e=doc.documentElement;
+        e.setAttribute("data-shot",mode);
+        e.style.paddingTop="0";e.style.paddingBottom="0";
+      }
+    }).then(function(canvas){
+      return Promise.all([blobOf(canvas,"image/png"),blobOf(canvas,"image/jpeg",0.92)]).then(function(b){
+        return b[1].arrayBuffer().then(function(buf){
+          var k=Math.min(1,14400/h); /* PDF 单页最大 14400 */
+          outPng=b[0];
+          outPdf=makePdf(new Uint8Array(buf),canvas.width,canvas.height,w*k,h*k);
+          if(outUrl)URL.revokeObjectURL(outUrl);
+          outUrl=URL.createObjectURL(outPng);
+          document.getElementById("outImg").src=outUrl;
+          toastEl.classList.remove("show");
+          document.getElementById("out").classList.add("open");
+        });
+      });
+    });
+  }).catch(function(){
+    toast("导出失败：需要联网加载截图组件，请检查网络后重试",3500);
+  }).then(function(){
+    exporting=false;
+    window.scrollTo(0,oldY);
+  });
 }
+
+/* 保存：手机优先走系统分享（可存到相册/文件），否则直接下载 */
+function saveBlob(blob,name){
+  if(!blob)return;
+  var mobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+  function dl(){
+    var a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);a.download=name;
+    document.body.appendChild(a);a.click();
+    setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},4000);
+  }
+  try{
+    var file=new File([blob],name,{type:blob.type});
+    if(mobile&&navigator.canShare&&navigator.canShare({files:[file]})){
+      navigator.share({files:[file]}).catch(function(e){if(!e||e.name!=="AbortError")dl();});
+      return;
+    }
+  }catch(e){}
+  dl();
+}
+function outName(ext){return prefs.name+"-聊天-"+stamp()+"."+ext}
+document.getElementById("savePng").addEventListener("click",function(){saveBlob(outPng,outName("png"))});
+document.getElementById("savePdf").addEventListener("click",function(){saveBlob(outPdf,outName("pdf"))});
+function closeOut(){document.getElementById("out").classList.remove("open")}
+document.getElementById("outClose").addEventListener("click",closeOut);
+document.getElementById("outMask").addEventListener("click",closeOut);
+
 document.getElementById("exportPdf").onclick=function(){doExport("full")};
 document.getElementById("exportPlain").onclick=function(){doExport("plain")};
 
